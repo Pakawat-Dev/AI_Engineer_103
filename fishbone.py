@@ -1,6 +1,5 @@
 """
-Fishbone Diagram Root Cause Analysis with Agent-to-Agent Protocol.
-Simplified implementation maintaining full functionality.
+Fishbone Diagram Root Cause Analysis with LangGraph.
 """
 
 from __future__ import annotations
@@ -424,4 +423,5 @@ def main():
     print("Thank you for using the Fishbone Analysis System!")
 
 if __name__ == "__main__":
+
     main()
