@@ -37,7 +37,7 @@ class FishboneState(TypedDict):
     causes: Dict[str, List[str]]
     root_causes: Dict[str, Dict[str, List[str]]]
     metadata: Dict[str, str]
-    messages: List[Dict[str, str]]  # Agent communication log
+
 
 class CauseIdentifierAgent:
     """Agent for identifying initial causes in Fishbone categories."""
@@ -59,22 +59,9 @@ class CauseIdentifierAgent:
             response = self.llm.invoke(prompt)
             data = self._parse_response(response.content)
             state["causes"] = self._extract_causes(data, state["categories"])
-            
-            # Log agent communication
-            state["messages"].append({
-                "from": self.agent_name,
-                "to": "root_cause_analyzer",
-                "content": "Causes identified",
-                "timestamp": datetime.now().isoformat()
-            })
-            
         except Exception as e:
-            state["messages"].append({
-                "from": self.agent_name,
-                "to": "orchestrator",
-                "content": f"Error: {str(e)}",
-                "timestamp": datetime.now().isoformat()
-            })
+            pass
+            state["causes"] = {cat: [] for cat in state["categories"]}
         
         return state
     
@@ -166,22 +153,9 @@ class RootCauseAnalyzerAgent:
                 data,
                 state["causes"]
             )
-            
-            # Log agent communication
-            state["messages"].append({
-                "from": self.agent_name,
-                "to": "result_formatter",
-                "content": "Root causes analyzed",
-                "timestamp": datetime.now().isoformat()
-            })
-            
         except Exception as e:
-            state["messages"].append({
-                "from": self.agent_name,
-                "to": "orchestrator",
-                "content": f"Error: {str(e)}",
-                "timestamp": datetime.now().isoformat()
-            })
+            pass
+            state["root_causes"] = {}
         
         return state
     
@@ -252,8 +226,14 @@ class RootCauseAnalyzerAgent:
 class ResultFormatterAgent:
     """Agent for formatting and finalizing results."""
     
-    def __init__(self):
+    def __init__(self, model: str = MODEL, temperature: float = 0):
         self.agent_name = "result_formatter"
+        self.llm = ChatOpenAI(
+            model=model,
+            temperature=temperature,
+            max_tokens=1000,
+            timeout=30
+        )
     
     def format_results(self, state: FishboneState) -> FishboneState:
         """Add metadata and finalize results."""
@@ -264,14 +244,6 @@ class ResultFormatterAgent:
             "categories_analyzed": len(state["categories"]),
             "total_causes": sum(len(c) for c in state["causes"].values())
         }
-        
-        # Log completion
-        state["messages"].append({
-            "from": self.agent_name,
-            "to": "orchestrator",
-            "content": "Analysis complete",
-            "timestamp": datetime.now().isoformat()
-        })
         
         return state
 
@@ -316,8 +288,7 @@ class FishboneAnalyzer:
             categories=categories or CATEGORIES_6M.copy(),
             causes={},
             root_causes={},
-            metadata={},
-            messages=[]
+            metadata={}
         )
         
         # Run workflow
@@ -328,8 +299,7 @@ class FishboneAnalyzer:
             "effect": result["effect"],
             "causes": result["causes"],
             "root_causes": result["root_causes"],
-            "metadata": result["metadata"],
-            "agent_messages": result["messages"]
+            "metadata": result["metadata"]
         }
     
     def display_results(self, results: Dict) -> None:
@@ -338,8 +308,10 @@ class FishboneAnalyzer:
         print(f"FISHBONE ANALYSIS: {results['effect']}")
         print("="*80)
         
+        has_results = False
         for category, causes in results["causes"].items():
             if causes:
+                has_results = True
                 print(f"\n📁 {category}:")
                 for cause in causes:
                     print(f"   ├── {cause}")
@@ -350,6 +322,9 @@ class FishboneAnalyzer:
                         if rc and rc != "Analysis pending":
                             connector = "└──" if i == len(root_causes) - 1 else "├──"
                             print(f"   │   {connector} Why? {rc}")
+        
+        if not has_results:
+            print("\n❌ No causes identified. Please check your API key and try again.")
         
         print(f"\n⏰ Completed at: {results['metadata'].get('timestamp')}")
         print("-"*80)
@@ -376,7 +351,6 @@ def main():
     
     print("\n" + "="*50)
     print("FISHBONE ANALYSIS SYSTEM")
-    print("Agent-to-Agent Protocol Implementation")
     print("="*50)
     
     # Initialize analyzer
@@ -423,5 +397,5 @@ def main():
     print("Thank you for using the Fishbone Analysis System!")
 
 if __name__ == "__main__":
-
     main()
+
